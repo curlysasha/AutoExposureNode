@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auto Exposure Corrector</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            text-align: center;
+        }
+        #originalCanvas, #correctedCanvas {
+            border: 1px solid #ccc;
+            margin: 10px;
+        }
+        input[type="file"] {
+            margin: 20px 0;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Auto Exposure Correction</h1>
+        <input type="file" id="imageInput" accept="image/*">
+        <button onclick="processImage()">Correct Exposure</button>
+        <div>
+            <canvas id="originalCanvas"></canvas>
+            <canvas id="correctedCanvas"></canvas>
+        </div>
+    </div>
+
+    <script>
+        const input = document.getElementById('imageInput');
+        const originalCanvas = document.getElementById('originalCanvas');
+        const correctedCanvas = document.getElementById('correctedCanvas');
+
+        input.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            
+            reader.onload = function(event) {
+                const img = new Image();
+                img.onload = function() {
+                    originalCanvas.width = img.width;
+                    originalCanvas.height = img.height;
+                    const ctx = originalCanvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+                }
+                img.src = event.target.result;
+            }
+            reader.readAsDataURL(file);
+        });
+
+        async function processImage() {
+            const file = input.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('image', file);
+
+            try {
+                const response = await fetch('/process', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const blob = await response.blob();
+                const img = new Image();
+                img.onload = function() {
+                    correctedCanvas.width = img.width;
+                    correctedCanvas.height = img.height;
+                    const ctx = correctedCanvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+                }
+                img.src = URL.createObjectURL(blob);
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+    </script>
+</body>
+</html>
