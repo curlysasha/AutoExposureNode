@@ -21,7 +21,7 @@ class ZeroDCE_Node:
         return {
             "required": {
                 "image": ("IMAGE",),
-                "alpha": ("FLOAT", {"default": 0.1, "min": 0.05, "max": 0.3, "step": 0.05}),
+                "alpha": ("FLOAT", {"default": 0.15, "min": 0.05, "max": 0.3, "step": 0.05}),
                 "gamma": ("FLOAT", {"default": 1.2, "min": 0.8, "max": 1.5, "step": 0.1})
             }
         }
