@@ -14,8 +14,8 @@ CORS(app)
 def index():
     return render_template('index.html')
 
-# Initialize Zero-DCE model
-zero_dce = ZeroDCE(device='cpu')
+# Initialize Zero-DCE model with pretrained weights
+zero_dce = ZeroDCE(device='cpu', weights_path='models/weights/Epoch99.pth')
 
 @app.route('/process', methods=['POST'])
 def process_image():
