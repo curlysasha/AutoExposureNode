@@ -3,51 +3,243 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Auto Exposure Corrector</title>
+    <title>Neural Exposure Correction</title>
     <style>
+        :root {
+            --primary: #4CAF50;
+            --primary-hover: #45a049;
+            --background: #f8f9fa;
+            --card-bg: white;
+            --text: #333;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
         body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
+            font-family: 'Segoe UI', sans-serif;
+            background: var(--background);
+            color: var(--text);
+            line-height: 1.6;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 2rem;
         }
+
         .container {
+            max-width: 1200px;
+            width: 100%;
+        }
+
+        .header {
             text-align: center;
+            margin-bottom: 2rem;
+            padding: 1rem;
+            background: var(--card-bg);
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
         }
-        #originalCanvas, #correctedCanvas {
-            border: 1px solid #ccc;
-            margin: 10px;
+
+        .main-content {
+            display: grid;
+            gap: 2rem;
         }
-        input[type="file"] {
-            margin: 20px 0;
+
+        .control-card {
+            background: var(--card-bg);
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
         }
-        button {
-            padding: 10px 20px;
-            background-color: #4CAF50;
+
+        .file-upload {
+            margin-bottom: 2rem;
+            position: relative;
+        }
+
+        .file-upload input {
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            position: absolute;
+            top: 0;
+            left: 0;
+            cursor: pointer;
+        }
+
+        .file-upload label {
+            display: block;
+            padding: 1.5rem;
+            background: var(--primary);
+            color: white;
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .file-upload label:hover {
+            background: var(--primary-hover);
+        }
+
+        .slider-group {
+            margin: 1.5rem 0;
+        }
+
+        .slider-container {
+            margin: 1rem 0;
+        }
+
+        .slider-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+
+        .slider-value {
+            color: var(--primary);
+            font-weight: bold;
+        }
+
+        .slider {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 8px;
+            background: #e0e0e0;
+            border-radius: 4px;
+            outline: none;
+            transition: background 0.3s;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            background: var(--primary);
+            border-radius: 50%;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .slider::-webkit-slider-thumb:hover {
+            transform: scale(1.1);
+        }
+
+        .process-btn {
+            width: 100%;
+            padding: 1rem;
+            background: var(--primary);
             color: white;
             border: none;
-            border-radius: 4px;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: bold;
             cursor: pointer;
+            transition: background 0.3s;
+            margin-top: 1rem;
+        }
+
+        .process-btn:hover {
+            background: var(--primary-hover);
+        }
+
+        .canvas-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+
+        .canvas-wrapper {
+            position: relative;
+            background: var(--card-bg);
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            padding: 1rem;
+        }
+
+        .canvas-wrapper::before {
+            content: attr(data-label);
+            position: absolute;
+            top: -10px;
+            left: 1rem;
+            background: var(--primary);
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            font-size: 0.9rem;
+        }
+
+        canvas {
+            width: 100%;
+            height: auto;
+            border-radius: 8px;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Auto Exposure Correction</h1>
-        <input type="file" id="imageInput" accept="image/*">
-        <button onclick="processImage()">Correct Exposure</button>
-        <div>
-            <canvas id="originalCanvas"></canvas>
-            <canvas id="correctedCanvas"></canvas>
-        </div>
+        <header class="header">
+            <h1>Neural Exposure Correction</h1>
+            <p>Adjust parameters using the sliders below</p>
+        </header>
+
+        <main class="main-content">
+            <div class="control-card">
+                <div class="file-upload">
+                    <input type="file" id="imageInput" accept="image/*">
+                    <label for="imageInput">Choose Image</label>
+                </div>
+
+                <div class="slider-group">
+                    <div class="slider-container">
+                        <div class="slider-label">
+                            <span>Correction Strength</span>
+                            <span class="slider-value" id="alphaValue">0.1</span>
+                        </div>
+                        <input type="range" class="slider" id="alphaSlider" 
+                               min="0.05" max="0.3" step="0.05" value="0.1">
+                    </div>
+
+                    <div class="slider-container">
+                        <div class="slider-label">
+                            <span>Gamma Adjustment</span>
+                            <span class="slider-value" id="gammaValue">1.2</span>
+                        </div>
+                        <input type="range" class="slider" id="gammaSlider" 
+                               min="0.8" max="1.5" step="0.1" value="1.2">
+                    </div>
+                </div>
+
+                <button class="process-btn" onclick="processImage()">Process Image</button>
+            </div>
+
+            <div class="canvas-container">
+                <div class="canvas-wrapper" data-label="Original">
+                    <canvas id="originalCanvas"></canvas>
+                </div>
+                <div class="canvas-wrapper" data-label="Corrected">
+                    <canvas id="correctedCanvas"></canvas>
+                </div>
+            </div>
+        </main>
     </div>
 
     <script>
+        console.log("Script loaded");
+        
         const input = document.getElementById('imageInput');
         const originalCanvas = document.getElementById('originalCanvas');
         const correctedCanvas = document.getElementById('correctedCanvas');
 
         input.addEventListener('change', function(e) {
+            console.log('File selected:', e.target.files[0]);
             const file = e.target.files[0];
             const reader = new FileReader();
             
@@ -64,20 +256,45 @@
             reader.readAsDataURL(file);
         });
 
-        async function processImage() {
-            const file = input.files[0];
-            if (!file) return;
+        document.getElementById('alphaSlider').oninput = function() {
+            document.getElementById('alphaValue').textContent = this.value;
+        };
+        document.getElementById('gammaSlider').oninput = function() {
+            document.getElementById('gammaValue').textContent = this.value;
+        };
 
+        async function processImage() {
+            console.log('Process image button clicked');
+            const file = input.files[0];
+            if (!file) {
+                console.error('No file selected');
+                return;
+            }
+
+            const alpha = document.getElementById('alphaSlider').value;
+            const gamma = document.getElementById('gammaSlider').value;
+            
+            console.log('Creating FormData with alpha:', alpha, 'gamma:', gamma);
             const formData = new FormData();
             formData.append('image', file);
+            formData.append('alpha', alpha);
+            formData.append('gamma', gamma);
 
             try {
+                console.log('Sending request to server...');
                 const response = await fetch('/process', {
                     method: 'POST',
                     body: formData
                 });
                 
+                console.log('Received response status:', response.status);
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.status}`);
+                }
+
                 const blob = await response.blob();
+                console.log('Received image blob:', blob.size, 'bytes');
+                
                 const img = new Image();
                 img.onload = function() {
                     correctedCanvas.width = img.width;
@@ -87,7 +304,8 @@
                 }
                 img.src = URL.createObjectURL(blob);
             } catch (error) {
-                console.error('Error:', error);
+                console.error('Error processing image:', error);
+                alert('Error processing image: ' + error.message);
             }
         }
     </script>

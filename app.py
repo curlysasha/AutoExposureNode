@@ -37,19 +37,16 @@ def process_image():
         print("Starting image processing", flush=True)
         
         # Open and convert image
-        img = Image.open(file.stream)
-        print(f"Opened image: size={img.size} mode={img.mode}", flush=True)
+        img = Image.open(file.stream).convert('RGB')
+        print(f"Processing image: size={img.size} mode={img.mode}", flush=True)
         
-        if img.mode != 'RGB':
-            print(f"Converting image from {img.mode} to RGB", flush=True)
-            img = img.convert('RGB')
-            print(f"Converted image mode: {img.mode}", flush=True)
+        # Get parameters from sliders with defaults
+        alpha = float(request.form.get('alpha', 0.1))
+        gamma = float(request.form.get('gamma', 1.2))
+        print(f"Using enhancement parameters - alpha: {alpha}, gamma: {gamma}")
         
-        # Apply neural network exposure correction
-        img_tensor = zero_dce.preprocess(img)
-        print(f"Original image range: {img_tensor.min().item()} {img_tensor.max().item()}")
-        enhanced_tensor = zero_dce.enhance(img_tensor, use_nn=True)
-        corrected_img = zero_dce.postprocess(enhanced_tensor)
+        # Enhance with neural network using slider parameters
+        corrected_img = zero_dce.enhance(img, alpha=alpha, gamma=gamma)
         
         # Save to bytes buffer
         img_byte_arr = io.BytesIO()

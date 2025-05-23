@@ -2,123 +2,97 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+import cv2
 from PIL import Image
 
 class DCE_Net(nn.Module):
     def __init__(self):
         super(DCE_Net, self).__init__()
-        self.downsample = nn.Upsample(scale_factor=0.5, mode='bilinear')
-        self.upsample = nn.Upsample(scale_factor=2, mode='bilinear')
-        
-        self.conv1 = nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1)
-        self.conv2 = nn.Conv2d(32, 32, kernel_size=3, stride=1, padding=1)
-        self.conv3 = nn.Conv2d(32, 32, kernel_size=3, stride=1, padding=1)
-        self.conv4 = nn.Conv2d(32, 32, kernel_size=3, stride=1, padding=1)
-        self.conv5 = nn.Conv2d(32, 32, kernel_size=3, stride=1, padding=1)
-        self.conv6 = nn.Conv2d(32, 32, kernel_size=3, stride=1, padding=1)
-        self.conv7 = nn.Conv2d(32, 24, kernel_size=3, stride=1, padding=1)
-        
+        self.e_conv1 = nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1)
+        self.e_conv2 = nn.Conv2d(32, 32, kernel_size=3, stride=1, padding=1)
+        self.e_conv3 = nn.Conv2d(32, 32, kernel_size=3, stride=1, padding=1)
+        self.e_conv4 = nn.Conv2d(32, 32, kernel_size=3, stride=1, padding=1)
+        self.e_conv5 = nn.Conv2d(32, 32, kernel_size=3, stride=1, padding=1)
+        self.e_conv6 = nn.Conv2d(32, 32, kernel_size=3, stride=1, padding=1)
+        self.e_conv7 = nn.Conv2d(32, 24, kernel_size=3, stride=1, padding=1)
+
     def forward(self, x):
-        x1 = F.relu(self.conv1(x))
-        x2 = F.relu(self.conv2(x1))
-        x3 = F.relu(self.conv3(x2))
-        x4 = F.relu(self.conv4(x3))
-        x5 = F.relu(self.conv5(x4))
-        x6 = F.relu(self.conv6(x5))
-        x_r = torch.tanh(self.conv7(x6))
-        
-        return x_r
+        x1 = F.relu(self.e_conv1(x))
+        x2 = F.relu(self.e_conv2(x1))
+        x3 = F.relu(self.e_conv3(x2))
+        x4 = F.relu(self.e_conv4(x3))
+        x5 = F.relu(self.e_conv5(x4))
+        x6 = F.relu(self.e_conv6(x5))
+        x7 = torch.tanh(self.e_conv7(x6))
+        return x7
 
 class ZeroDCE:
-    def __init__(self, device='cpu', weights_path='models/weights/Epoch99.pth'):
+    def __init__(self, device='cpu', weights_path=None):
         self.device = device
         self.model = DCE_Net().to(device)
-        self.load_weights(weights_path)
-        
+        self.weights_path = weights_path
+        if weights_path:
+            self.load_weights(weights_path)
+
     def load_weights(self, weights_path):
         try:
-            print(f"Loading weights from: {weights_path}")
-            state_dict = torch.load(weights_path, map_location=self.device)
-            self.model.load_state_dict(state_dict)
-            self.model.eval()  # Set to evaluation mode
-            print("Weights loaded successfully")
+            self.model.load_state_dict(torch.load(weights_path, map_location=self.device))
         except Exception as e:
-            print(f"Error loading weights: {str(e)}")
-            print("Initializing with default weights")
-            for m in self.model.modules():
-                if isinstance(m, nn.Conv2d):
-                    nn.init.kaiming_normal_(m.weight)
-                    if m.bias is not None:
-                        nn.init.constant_(m.bias, 0)
-            self.model.eval()
-                        
-    def enhance(self, img_tensor, alpha=0.1, gamma=1.2, use_nn=True):
-        with torch.no_grad():
-            if use_nn:
-                print(f"Input tensor range: {img_tensor.min().item():.2f}-{img_tensor.max().item():.2f}")
-                LE = self.model(img_tensor)
-                print(f"Model output range: {LE.min().item():.2f}-{LE.max().item():.2f}")
-                
-                if LE.shape[1] != 24:
-                    raise ValueError(f"Unexpected model output channels: {LE.shape[1]}, expected 24")
-                
-                LE_list = torch.split(LE, 3, dim=1)
-                enhanced = img_tensor
-                
-                # Apply enhancement curves iteratively
-                for i, le in enumerate(LE_list):
-                    enhanced = enhanced + alpha * (enhanced - le * enhanced)
-                    enhanced = torch.clamp(enhanced, 0.01, 1.0)  # Wider value range
-                    print(f"Step {i+1} range: {enhanced.min().item():.2f}-{enhanced.max().item():.2f}")
-                    
-                # Stronger blending with original image
-                enhanced = 0.5 * enhanced + 0.5 * img_tensor
-            else:
-                # Fallback to histogram adjustment
-                enhanced = self.histogram_adjustment(img_tensor)
-                
-            enhanced = torch.clamp(enhanced, 0, 1)
-            enhanced = torch.pow(enhanced, 1/gamma)
-            print(f"Final enhanced tensor shape: {enhanced.shape}")
-            return enhanced
+            print(f"Error loading weights: {e}")
+            print("Initializing with random weights")
 
-    def histogram_adjustment(self, img_tensor):
-        """Simple histogram-based exposure adjustment"""
-        # Convert to numpy for processing
-        img_np = img_tensor.squeeze(0).permute(1, 2, 0).cpu().numpy()
+    def enhance(self, image, alpha=0.1, gamma=1.2):
+        try:
+            input_tensor = self.preprocess(image)
+            with torch.no_grad():
+                output_curves = self.model(input_tensor.to(self.device))
+            return self.postprocess(input_tensor, output_curves, alpha, gamma)
+        except Exception as e:
+            print(f"Neural enhancement failed: {e}")
+            print("Falling back to histogram adjustment")
+            return self.histogram_adjustment(image)
+
+    def histogram_adjustment(self, image):
+        img = np.array(image)
+        img_yuv = cv2.cvtColor(img, cv2.COLOR_RGB2YUV)
+        img_yuv[:,:,0] = cv2.equalizeHist(img_yuv[:,:,0])
+        return Image.fromarray(cv2.cvtColor(img_yuv, cv2.COLOR_YUV2RGB))
+
+    @staticmethod
+    def preprocess(image):
+        img = np.array(image).astype(np.float32) / 255.0
+        img = torch.from_numpy(img).permute(2, 0, 1).unsqueeze(0)
+        return img
+
+    @staticmethod
+    def postprocess(input_tensor, curves_tensor, alpha, gamma):
+        # Convert tensors to numpy arrays
+        input_img = input_tensor.squeeze(0).permute(1, 2, 0).cpu().numpy()
+        curves = curves_tensor.squeeze(0).permute(1, 2, 0).cpu().numpy()
         
-        # Scale to 0-255 and convert to uint8
-        img_scaled = np.clip(img_np * 255, 0, 255).astype('uint8')
+        # Reshape curves to (height, width, 8, 3)
+        h, w, _ = curves.shape
+        curves = curves.reshape(h, w, 8, 3)
         
-        # Calculate histogram and cumulative distribution
-        hist, bins = np.histogram(img_scaled.flatten(), 256, [0,256])
-        cdf = hist.cumsum()
-        cdf_normalized = cdf / cdf.max()
+        # Scale curves from [-1, 1] to [0, 1] using tanh output
+        curves = (curves + 1) / 2  # Now in [0, 1]
         
-        # Create lookup table
-        lookup = np.interp(np.arange(0,256), bins[:-1], cdf_normalized)
+        # Apply gamma correction to input
+        enhanced = np.power(input_img.copy(), 1/gamma)  # Using inverse gamma for correction
         
-        # Apply histogram equalization and scale back to 0-1
-        enhanced_np = lookup[img_scaled].astype('float32') / 255.0
-        
-        print(f"Histogram adjustment - input range: {img_np.min()} {img_np.max()}")
-        print(f"Enhanced range: {enhanced_np.min()} {enhanced_np.max()}")
-        
-        # Convert back to tensor
-        enhanced = torch.from_numpy(enhanced_np).permute(2, 0, 1).unsqueeze(0)
-        return enhanced.to(img_tensor.device)
+        # Apply enhancement curves with safe scaling
+        for i in range(8):
+            enhanced += alpha * enhanced * curves[:, :, i, :]
+            enhanced = np.clip(enhanced, 0, 2)  # Allow some overexposure
             
-    @staticmethod
-    def preprocess(img_pil):
-        img_tensor = torch.from_numpy(np.array(img_pil)).float() / 255.0
-        img_tensor = img_tensor.permute(2, 0, 1).unsqueeze(0)
-        return img_tensor
+        # Normalize with epsilon to prevent division by zero
+        eps = 1e-7
+        enhanced = (enhanced - enhanced.min()) / (enhanced.max() - enhanced.min() + eps)
         
-    @staticmethod
-    def postprocess(enhanced_tensor):
-        enhanced = enhanced_tensor.squeeze(0).permute(1, 2, 0).cpu().numpy()
-        print(f"Postprocess - enhanced range: {enhanced.min()} {enhanced.max()}")
-        enhanced = np.clip(enhanced, 0, 1)  # Ensure valid range
-        enhanced = (enhanced * 255).astype('uint8')
-        print(f"Postprocess - final image range: {enhanced.min()} {enhanced.max()}")
+        # Convert to 8-bit with proper scaling
+        enhanced = np.clip(enhanced * 255, 0, 255).astype(np.uint8)
+        
+        print(f"Debug - Curves range: {curves.min():.2f}-{curves.max():.2f}")
+        print(f"Debug - Enhanced range pre-clip: {enhanced.min()}-{enhanced.max()}")
+        
         return Image.fromarray(enhanced)
