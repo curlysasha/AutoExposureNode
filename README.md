@@ -2,6 +2,8 @@
 
 Web application and ComfyUI node for automatic image exposure correction using neural networks.
 
+![image](https://github.com/user-attachments/assets/1cf75353-c798-487e-9aa1-04ced47f186f)
+
 ## Features
 
 - Neural network-based exposure correction (Zero-DCE model)
